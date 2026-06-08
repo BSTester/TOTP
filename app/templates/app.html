@@ -29,23 +29,23 @@
           <h2>生成验证码</h2>
         </div>
 
-        <form id="generateCodeForm" class="stack">
-          <label for="qrFile">二维码图片</label>
-          <div id="dropZone" class="drop-zone">
-            <div>
-              <strong>拖拽二维码图片到这里</strong>
-              <span>或点击选择图片，识别后会自动回填链接并移除图片</span>
-            </div>
-            <div class="file-row">
-              <input id="qrFile" type="file" accept="image/*" />
-              <button id="clearQrBtn" type="button" class="ghost-btn small-btn">删除图片</button>
-            </div>
-          </div>
-
+        <form id="generateCodeForm" class="stack generate-form">
           <label for="totpSource">Base32 密钥或 otpauth URI</label>
           <textarea id="totpSource" rows="4" placeholder="上传二维码后会自动回填 otpauth:// 链接；也可以直接输入 Base32 密钥，如 JBSW Y3DP EHPK 3PXP"></textarea>
 
-          <button type="submit" class="primary-btn">生成验证码</button>
+          <div class="source-action-row">
+            <div id="dropZone" class="drop-zone upload-control">
+              <div>
+                <strong>上传二维码图片</strong>
+                <span>点击选择或拖拽图片，识别后自动回填链接</span>
+              </div>
+              <div class="file-row">
+                <input id="qrFile" type="file" accept="image/*" />
+                <button id="clearQrBtn" type="button" class="ghost-btn small-btn">删除图片</button>
+              </div>
+            </div>
+            <button type="submit" class="primary-btn generate-submit-btn">生成验证码</button>
+          </div>
         </form>
 
         <pre id="importResult" class="result compact-result"></pre>
@@ -167,8 +167,7 @@
     }
 
     function formatCode(value) {
-      const code = String(value || '------');
-      return code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code;
+      return String(value || '------');
     }
 
     async function copyText(value) {

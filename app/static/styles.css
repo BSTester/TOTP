@@ -261,7 +261,7 @@ h2 { font-size: 1.08rem; }
 
 .dashboard {
   display: grid;
-  grid-template-columns: 380px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
@@ -271,8 +271,7 @@ h2 { font-size: 1.08rem; }
 }
 
 .import-card {
-  position: sticky;
-  top: 1rem;
+  position: relative;
 }
 
 .section-title, .records-head {
@@ -321,6 +320,26 @@ input[type="file"]::file-selector-button {
   padding: 0.48rem 0.7rem;
   color: #d8e8ff;
   background: rgba(91, 140, 255, 0.16);
+}
+
+.generate-form textarea {
+  min-height: 138px;
+}
+
+.source-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  gap: 0.9rem;
+  align-items: stretch;
+}
+
+.upload-control {
+  min-height: 108px;
+}
+
+.generate-submit-btn {
+  min-height: 108px;
+  font-size: 1.03rem;
 }
 
 .records-grid {
@@ -375,7 +394,10 @@ input[type="file"]::file-selector-button {
   font-weight: 950;
   line-height: 1;
   letter-spacing: 0.08em;
+  text-align: center;
   text-shadow: 0 0 30px rgba(91, 140, 255, 0.42);
+  white-space: nowrap;
+  word-break: keep-all;
 }
 
 .timer-track {
@@ -436,7 +458,6 @@ input[type="file"]::file-selector-button {
 }
 
 @media (max-width: 900px) {
-  .dashboard { grid-template-columns: 1fr; }
   .import-card { position: static; }
   .topbar { align-items: flex-start; flex-direction: column; }
 }
@@ -446,6 +467,8 @@ input[type="file"]::file-selector-button {
   .app-shell { width: min(100% - 1.2rem, 1180px); padding-top: 1rem; }
   .top-actions { width: 100%; justify-content: space-between; }
   .records-grid { grid-template-columns: 1fr; }
+  .source-action-row { grid-template-columns: 1fr; }
+  .generate-submit-btn { min-height: 58px; }
 }
 
 .key-box {
@@ -629,7 +652,7 @@ input[type="file"]::file-selector-button {
 }
 
 .copy-code-btn {
-  align-self: flex-start;
+  align-self: flex-end;
   min-height: 34px;
   padding: 0.42rem 0.72rem;
   color: #bffdf1;
