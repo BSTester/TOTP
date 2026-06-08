@@ -63,6 +63,11 @@
           </div>
         </div>
         <div id="recordsGrid" class="records-grid"></div>
+        <div id="recordsPager" class="pagination-bar" hidden>
+          <button id="prevPageBtn" type="button" class="ghost-btn small-btn">上一页</button>
+          <span id="pageSummary" class="page-summary">第 1 / 1 页</span>
+          <button id="nextPageBtn" type="button" class="ghost-btn small-btn">下一页</button>
+        </div>
         <div id="listStatus" class="status-line">等待刷新</div>
       </section>
     </main>
@@ -114,9 +119,11 @@
   </div>
 
   <script>
+    const PAGE_SIZE = 10;
     const records = new Map();
     let refreshInFlight = false;
     let searchText = '';
+    let currentPage = 1;
     let copiedUniqueId = '';
     let copiedUntil = 0;
 
@@ -204,20 +211,48 @@
       `;
     }
 
-    function renderRecords() {
-      const container = document.getElementById('recordsGrid');
-      const items = Array.from(records.values()).filter((item) => {
+    function getFilteredRecords() {
+      return Array.from(records.values()).filter((item) => {
         if (!searchText) {
           return true;
         }
         return String(item.unique_id || '').toLowerCase().includes(searchText);
       });
-      if (!items.length) {
-        container.innerHTML = `<div class="empty-state">${searchText ? '没有匹配的唯一标识' : '暂无动态密码记录'}</div>`;
+    }
+
+    function renderPager(totalItems, totalPages) {
+      const pager = document.getElementById('recordsPager');
+      const summary = document.getElementById('pageSummary');
+      const prevBtn = document.getElementById('prevPageBtn');
+      const nextBtn = document.getElementById('nextPageBtn');
+
+      if (!totalItems) {
+        pager.hidden = true;
         return;
       }
+
+      pager.hidden = false;
+      prevBtn.disabled = currentPage <= 1;
+      nextBtn.disabled = currentPage >= totalPages;
+      summary.textContent = `第 ${currentPage} / ${totalPages} 页 · 共 ${totalItems} 条 · 每页 ${PAGE_SIZE} 条`;
+    }
+
+    function renderRecords() {
+      const container = document.getElementById('recordsGrid');
+      const items = getFilteredRecords();
+      if (!items.length) {
+        container.innerHTML = `<div class="empty-state">${searchText ? '没有匹配的唯一标识' : '暂无动态密码记录'}</div>`;
+        renderPager(0, 1);
+        return;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+      currentPage = Math.max(1, Math.min(currentPage, totalPages));
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const pageItems = items.slice(start, start + PAGE_SIZE);
       const now = Date.now();
-      container.innerHTML = items.map(item => renderRecordCard(item, now)).join('');
+      container.innerHTML = pageItems.map(item => renderRecordCard(item, now)).join('');
+      renderPager(items.length, totalPages);
     }
 
     async function callJson(url, options = {}) {
@@ -351,6 +386,7 @@
         out.textContent = `生成成功：${data.unique_id}`;
         document.getElementById('qrFile').value = '';
         document.getElementById('totpSource').value = '';
+        currentPage = 1;
         refreshList({ silent: true });
       } catch (err) {
         out.textContent = `错误: ${err.message}`;
@@ -366,6 +402,16 @@
     }
 
     document.getElementById('refreshList').addEventListener('click', () => refreshList());
+    document.getElementById('prevPageBtn').addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage -= 1;
+        renderRecords();
+      }
+    });
+    document.getElementById('nextPageBtn').addEventListener('click', () => {
+      currentPage += 1;
+      renderRecords();
+    });
     document.getElementById('recordsGrid').addEventListener('click', async (event) => {
       const button = event.target.closest('.copy-code-btn');
       if (!button) {
@@ -384,6 +430,7 @@
     });
     document.getElementById('recordSearch').addEventListener('input', (event) => {
       searchText = event.target.value.trim().toLowerCase();
+      currentPage = 1;
       renderRecords();
     });
     renderRecords();
