@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TOTP 控制台</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">SECURE TOTP VAULT</div>
+        <h1>动态密码控制台</h1>
+      </div>
+      <div class="top-actions">
+        <a class="ghost-btn small-btn nav-link" href="/api-docs">接口文档</a>
+        <span class="tenant-chip" title="当前 API Key">{{ masked_api_key }}</span>
+        <form method="post" action="/web/logout">
+          <button type="submit" class="ghost-btn small-btn">退出</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <section class="glass-card import-card">
+        <div class="section-title">
+          <span class="pulse-dot"></span>
+          <h2>生成验证码</h2>
+        </div>
+
+        <form id="generateCodeForm" class="stack">
+          <label for="qrFile">二维码图片</label>
+          <div id="dropZone" class="drop-zone">
+            <div>
+              <strong>拖拽二维码图片到这里</strong>
+              <span>或点击选择图片，识别后会自动回填链接并移除图片</span>
+            </div>
+            <div class="file-row">
+              <input id="qrFile" type="file" accept="image/*" />
+              <button id="clearQrBtn" type="button" class="ghost-btn small-btn">删除图片</button>
+            </div>
+          </div>
+
+          <label for="totpSource">Base32 密钥或 otpauth URI</label>
+          <textarea id="totpSource" rows="4" placeholder="上传二维码后会自动回填 otpauth:// 链接；也可以直接输入 Base32 密钥，如 JBSW Y3DP EHPK 3PXP"></textarea>
+
+          <button type="submit" class="primary-btn">生成验证码</button>
+        </form>
+
+        <pre id="importResult" class="result compact-result"></pre>
+      </section>
+
+      <section class="glass-card records-panel">
+        <div class="records-head">
+          <div class="section-title">
+            <span class="pulse-dot cyan"></span>
+            <h2>动态密码</h2>
+          </div>
+          <div class="records-tools">
+            <input id="recordSearch" type="search" placeholder="搜索唯一标识" autocomplete="off" />
+            <button id="refreshList" type="button" class="ghost-btn small-btn">刷新</button>
+          </div>
+        </div>
+        <div id="recordsGrid" class="records-grid"></div>
+        <div id="listStatus" class="status-line">等待刷新</div>
+      </section>
+    </main>
+
+    <section class="docs-grid faq-only">
+      <article class="glass-card faq-card">
+        <div class="section-title">
+          <span class="pulse-dot"></span>
+          <h2>常见问题</h2>
+        </div>
+        <details open>
+          <summary>什么是 2FA？</summary>
+          <p>2FA 是双因素认证。除了账号密码，还需要一次性动态验证码，降低密码泄露后的登录风险。</p>
+        </details>
+        <details>
+          <summary>什么是 TOTP 动态验证码？</summary>
+          <p>TOTP 是基于时间的一次性密码，常见于 Google Authenticator 类型的二次验证。系统使用共享密钥和当前时间计算验证码，默认每 30 秒刷新一次。</p>
+        </details>
+        <details>
+          <summary>支持哪些输入方式？</summary>
+          <p>支持 Base32 密钥、标准 otpauth:// 链接和二维码图片。上传二维码时会优先识别图片内容，并把识别出的链接回填到输入框；如果没有上传图片，则按输入框内容生成。</p>
+        </details>
+        <details>
+          <summary>Base32 密钥怎么填写？</summary>
+          <p>直接粘贴 2FA 设置页面提供的手动密钥即可。空格、小写字母和分组横线会自动规范化；默认使用 SHA1、6 位验证码、30 秒周期。</p>
+        </details>
+        <details>
+          <summary>什么是 otpauth:// 链接？</summary>
+          <p>otpauth:// 链接通常来自 2FA 二维码，里面包含密钥、签发方、账号标签、验证码位数、算法和刷新周期等参数。</p>
+        </details>
+        <details>
+          <summary>兼容 Google Authenticator、Microsoft Authenticator、Authy 吗？</summary>
+          <p>兼容标准 TOTP。只要对方系统提供 Base32 密钥或 otpauth:// 二维码，本系统生成的验证码通常会与主流身份验证器一致。</p>
+        </details>
+        <details>
+          <summary>二维码图片和密钥会怎样处理？</summary>
+          <p>当前项目是托管式 TOTP 服务：URI、Base32 密钥或二维码识别结果会发送到本服务生成记录；密钥会用 AES-GCM 加密后保存，接口响应不会返回明文密钥。上传的图片只用于识别二维码，服务端不持久化保存图片，读取后会关闭上传对象。</p>
+        </details>
+        <details>
+          <summary>使用前需要注意哪些风险？</summary>
+          <p>风险提醒：为支持通过接口二次获取验证码，本项目会在服务端保存必要的 TOTP 配置信息（密钥会加密存储）。请仅在你信任并可控的环境中使用，妥善保管 API Key；因使用本项目或配置不当造成的风险与损失，由使用者自行承担，本项目不承担责任。</p>
+        </details>
+        <details>
+          <summary>提示密钥无效时怎么办？</summary>
+          <p>请确认复制的是完整 Base32 密钥或完整 otpauth:// 链接。Base32 只能包含 A-Z 和 2-7；如果二维码属于专有推送登录流程，而不是标准 TOTP，可能无法生成动态验证码。</p>
+        </details>
+      </article>
+    </section>
+  </div>
+
+  <script>
+    const records = new Map();
+    let refreshInFlight = false;
+    let searchText = '';
+    let copiedUniqueId = '';
+    let copiedUntil = 0;
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[ch]));
+    }
+
+    function extractErrorMessage(value) {
+      if (!value) {
+        return '请求失败';
+      }
+      if (typeof value === 'string') {
+        return value;
+      }
+      if (Array.isArray(value)) {
+        return value.map(extractErrorMessage).join('；');
+      }
+      if (typeof value === 'object') {
+        if (value.msg) {
+          return value.msg;
+        }
+        if (value.detail) {
+          return extractErrorMessage(value.detail);
+        }
+        if (value.error) {
+          return extractErrorMessage(value.error);
+        }
+        return JSON.stringify(value);
+      }
+      return String(value);
+    }
+
+    function normalizeRecord(raw) {
+      const period = Number(raw.period || 30);
+      const remaining = Number(raw.remaining || period);
+      return {
+        ...raw,
+        period,
+        remaining,
+        expires_at: Date.now() + Math.max(1, remaining) * 1000
+      };
+    }
+
+    function formatCode(value) {
+      const code = String(value || '------');
+      return code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code;
+    }
+
+    async function copyText(value) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+        return;
+      }
+      const input = document.createElement('textarea');
+      input.value = value;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+    }
+
+    function renderRecordCard(record, now = Date.now()) {
+      const remaining = Math.max(0, Math.ceil((record.expires_at - now) / 1000));
+      const pct = Math.max(0, Math.min(100, (remaining / record.period) * 100));
+      const identity = String(record.unique_id || '').trim();
+      const rawCode = String(record.code || '');
+      const copied = copiedUniqueId === identity && copiedUntil > now;
+      return `
+        <article class="record-card compact-card">
+          <div class="record-topline">
+            <span class="card-identity">${escapeHtml(identity || '------')}</span>
+            <b>${remaining}s</b>
+          </div>
+          <div class="otp-code">${escapeHtml(formatCode(rawCode))}</div>
+          <button class="copy-code-btn ghost-btn small-btn" type="button" data-code="${escapeHtml(rawCode)}" data-id="${escapeHtml(identity)}">${copied ? '已复制' : '复制验证码'}</button>
+          <div class="timer-track"><span style="width:${pct}%"></span></div>
+        </article>
+      `;
+    }
+
+    function renderRecords() {
+      const container = document.getElementById('recordsGrid');
+      const items = Array.from(records.values()).filter((item) => {
+        if (!searchText) {
+          return true;
+        }
+        return String(item.unique_id || '').toLowerCase().includes(searchText);
+      });
+      if (!items.length) {
+        container.innerHTML = `<div class="empty-state">${searchText ? '没有匹配的唯一标识' : '暂无动态密码记录'}</div>`;
+        return;
+      }
+      const now = Date.now();
+      container.innerHTML = items.map(item => renderRecordCard(item, now)).join('');
+    }
+
+    async function callJson(url, options = {}) {
+      const headers = options.body instanceof FormData
+        ? (options.headers || {})
+        : { 'Content-Type': 'application/json', ...(options.headers || {}) };
+      const resp = await fetch(url, { ...options, headers });
+      let data;
+      try {
+        data = await resp.json();
+      } catch {
+        data = { detail: '响应不是 JSON' };
+      }
+      if (!resp.ok) {
+        throw new Error(extractErrorMessage(data.detail || data));
+      }
+      return data;
+    }
+
+    async function previewQrFile(file) {
+      const out = document.getElementById('importResult');
+      if (!file) {
+        return;
+      }
+      out.textContent = '正在识别二维码...';
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const data = await callJson('/api/totp/preview-qrcode', { method: 'POST', body: form });
+        document.getElementById('totpSource').value = data.otpauth_uri;
+        document.getElementById('qrFile').value = '';
+        out.textContent = '二维码已识别，链接已回填，图片已从页面中移除。';
+      } catch (err) {
+        out.textContent = `错误: ${err.message}`;
+      }
+    }
+
+    async function refreshList(options = {}) {
+      if (refreshInFlight) {
+        return;
+      }
+      refreshInFlight = true;
+      const status = document.getElementById('listStatus');
+      if (!options.silent) {
+        status.textContent = '刷新中...';
+      }
+      try {
+        const data = await callJson('/api/totp/list');
+        records.clear();
+        for (const item of data.items || []) {
+          records.set(item.unique_id, normalizeRecord(item));
+        }
+        renderRecords();
+        status.textContent = `已同步 ${data.items?.length || 0} 条 · ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        status.textContent = `错误: ${err.message}`;
+      } finally {
+        refreshInFlight = false;
+      }
+    }
+
+    document.getElementById('qrFile').addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        previewQrFile(file);
+      }
+    });
+
+    const dropZone = document.getElementById('dropZone');
+    for (const eventName of ['dragenter', 'dragover']) {
+      dropZone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropZone.classList.add('drag-active');
+      });
+    }
+
+    for (const eventName of ['dragleave', 'drop']) {
+      dropZone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropZone.classList.remove('drag-active');
+      });
+    }
+
+    dropZone.addEventListener('drop', (event) => {
+      const file = event.dataTransfer.files && event.dataTransfer.files[0];
+      if (!file) {
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        document.getElementById('importResult').textContent = '错误: 请拖入图片文件';
+        return;
+      }
+      document.getElementById('qrFile').value = '';
+      previewQrFile(file);
+    });
+
+    document.getElementById('clearQrBtn').addEventListener('click', () => {
+      document.getElementById('qrFile').value = '';
+      document.getElementById('importResult').textContent = '图片已删除，可以手动输入或粘贴链接。';
+      document.getElementById('totpSource').focus();
+    });
+
+    document.getElementById('generateCodeForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const out = document.getElementById('importResult');
+      const file = document.getElementById('qrFile').files[0];
+      const source = document.getElementById('totpSource').value.trim();
+
+      out.textContent = '生成中...';
+      try {
+        let data;
+        if (file) {
+          const form = new FormData();
+          form.append('file', file);
+          data = await callJson('/api/totp/import-qrcode', { method: 'POST', body: form });
+        } else {
+          if (!source) {
+            throw new Error('请上传二维码、输入 Base32 密钥或粘贴 otpauth URI');
+          }
+          const body = source.toLowerCase().startsWith('otpauth://')
+            ? { otpauth_uri: source, email: null }
+            : { base32_secret: source, email: null };
+          data = await callJson('/api/totp/import-source', {
+            method: 'POST',
+            body: JSON.stringify(body)
+          });
+        }
+
+        out.textContent = `生成成功：${data.unique_id}`;
+        document.getElementById('qrFile').value = '';
+        document.getElementById('totpSource').value = '';
+        refreshList({ silent: true });
+      } catch (err) {
+        out.textContent = `错误: ${err.message}`;
+      }
+    });
+
+    function tickRecords() {
+      renderRecords();
+      const now = Date.now();
+      if (Array.from(records.values()).some(item => item.expires_at <= now + 400)) {
+        refreshList({ silent: true });
+      }
+    }
+
+    document.getElementById('refreshList').addEventListener('click', () => refreshList());
+    document.getElementById('recordsGrid').addEventListener('click', async (event) => {
+      const button = event.target.closest('.copy-code-btn');
+      if (!button) {
+        return;
+      }
+      const code = button.dataset.code || '';
+      const uniqueId = button.dataset.id || '';
+      if (!code) {
+        return;
+      }
+      await copyText(code);
+      copiedUniqueId = uniqueId;
+      copiedUntil = Date.now() + 1600;
+      document.getElementById('listStatus').textContent = `验证码已复制：${uniqueId}`;
+      renderRecords();
+    });
+    document.getElementById('recordSearch').addEventListener('input', (event) => {
+      searchText = event.target.value.trim().toLowerCase();
+      renderRecords();
+    });
+    renderRecords();
+    refreshList();
+    setInterval(tickRecords, 1000);
+  </script>
+</body>
+</html>

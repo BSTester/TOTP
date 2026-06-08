@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*.db
+.dev_master_key
+.venv/
+.git/
+.gitignore
+tests/

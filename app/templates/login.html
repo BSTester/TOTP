@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TOTP 控制台 - 登录</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="auth-shell">
+    <section class="auth-card glass-card">
+      <div class="brand-mark">2FA</div>
+      <h1>TOTP 控制台</h1>
+      <p class="subtle">使用 API Key 进入动态密码管理界面</p>
+
+      <form class="stack" method="post" action="/web/login">
+        <label for="apiKeyInput">API Key</label>
+        <input id="apiKeyInput" name="api_key" type="text" placeholder="tk_xxx" autocomplete="off" required />
+        <button type="submit" class="primary-btn">进入控制台</button>
+      </form>
+
+      <div class="divider"><span>OR</span></div>
+
+      <button id="generateBtn" type="button" class="ghost-btn">生成新 Key</button>
+      <div id="keyBox" class="key-box" hidden>
+        <code id="generatedKey"></code>
+        <button id="copyKeyBtn" type="button" class="ghost-btn small-btn">复制</button>
+      </div>
+      <p id="saveTip" class="save-tip" hidden>请立即复制并妥善保存，刷新或离开后将不会再次显示完整 Key。</p>
+    </section>
+  </main>
+
+  <script>
+    const generateBtn = document.getElementById('generateBtn');
+    const keyBox = document.getElementById('keyBox');
+    const generatedKey = document.getElementById('generatedKey');
+    const copyKeyBtn = document.getElementById('copyKeyBtn');
+    const saveTip = document.getElementById('saveTip');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+
+    async function copyText(value) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+        return;
+      }
+      const input = document.createElement('textarea');
+      input.value = value;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+    }
+
+    generateBtn.addEventListener('click', async () => {
+      generatedKey.textContent = '生成中...';
+      keyBox.hidden = false;
+      saveTip.hidden = true;
+      try {
+        const resp = await fetch('/api/keys/generate', { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.detail || '生成失败');
+        }
+
+        apiKeyInput.value = data.api_key;
+        generatedKey.textContent = data.api_key;
+        copyKeyBtn.textContent = '复制';
+        saveTip.hidden = false;
+      } catch (err) {
+        generatedKey.textContent = `错误: ${err.message}`;
+      }
+    });
+
+    copyKeyBtn.addEventListener('click', async () => {
+      const value = generatedKey.textContent.trim();
+      if (!value || value.startsWith('错误') || value === '生成中...') {
+        return;
+      }
+      await copyText(value);
+      copyKeyBtn.textContent = '已复制';
+      setTimeout(() => { copyKeyBtn.textContent = '复制'; }, 1600);
+    });
+  </script>
+</body>
+</html>

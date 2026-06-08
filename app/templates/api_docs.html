@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>接口文档 - TOTP 控制台</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-shell docs-page-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">API REFERENCE</div>
+        <h1>接口文档</h1>
+        <p class="subtle docs-lead">仅展示动态密码获取与查询接口。所有接口都需要在请求头中传入 <code>X-API-Key</code>。</p>
+        <p class="risk-banner">风险提醒：为支持通过接口二次获取验证码，本项目会在服务端保存必要的 TOTP 配置信息（密钥会加密存储）。请仅在你信任并可控的环境中使用，妥善保管 API Key；因使用本项目或配置不当造成的风险与损失，由使用者自行承担，本项目不承担责任。</p>
+      </div>
+      <div class="top-actions">
+        <a class="ghost-btn small-btn nav-link" href="/app">返回控制台</a>
+      </div>
+    </header>
+
+    <main class="api-doc-page">
+      <section class="doc-section glass-card">
+        <div class="section-title">
+          <span class="pulse-dot"></span>
+          <h2>一次生成动态密码</h2>
+        </div>
+        <p class="doc-desc">适合临时取码，不落库；支持 Base32 密钥、otpauth URI 和二维码图片。</p>
+
+        <div class="endpoint-row">
+          <span class="method post">POST</span>
+          <code>/api/totp/code-from-source</code>
+        </div>
+        <p class="doc-desc">JSON 请求。传 <code>base32_secret</code> 或 <code>otpauth_uri</code> 其中一个即可。</p>
+        <pre><code>curl -X POST http://127.0.0.1:8010/api/totp/code-from-source \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: tk_xxx" \
+  -d '{"base32_secret":"JBSW Y3DP EHPK 3PXP"}'</code></pre>
+        <pre><code>curl -X POST http://127.0.0.1:8010/api/totp/code-from-source \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: tk_xxx" \
+  -d '{"otpauth_uri":"otpauth://totp/Demo?secret=JBSWY3DPEHPK3PXP&issuer=Demo"}'</code></pre>
+
+        <div class="endpoint-row">
+          <span class="method post">POST</span>
+          <code>/api/totp/code-from-qrcode</code>
+        </div>
+        <p class="doc-desc">multipart 上传二维码图片。图片只用于本次识别，不会持久化保存。</p>
+        <pre><code>curl -X POST http://127.0.0.1:8010/api/totp/code-from-qrcode \
+  -H "X-API-Key: tk_xxx" \
+  -F "file=@qrcode.png"</code></pre>
+
+        <h3>响应示例</h3>
+        <pre><code>{
+  "code": "123456",
+  "period": 30,
+  "remaining": 18,
+  "persisted": false,
+  "unique_id": null
+}</code></pre>
+      </section>
+
+      <section class="doc-section glass-card">
+        <div class="section-title">
+          <span class="pulse-dot cyan"></span>
+          <h2>查询动态密码</h2>
+        </div>
+        <p class="doc-desc">先在控制台生成记录，拿到 8 位唯一标识后，可通过接口实时查询当前验证码。</p>
+
+        <div class="endpoint-row">
+          <span class="method get">GET</span>
+          <code>/api/totp/code/{唯一标识}</code>
+        </div>
+        <pre><code>curl -X GET "http://127.0.0.1:8010/api/totp/code/a1b2c3d4" \
+  -H "X-API-Key: tk_xxx"</code></pre>
+        <h3>响应示例</h3>
+        <pre><code>{
+  "id": "totp_xxxxxx",
+  "unique_id": "a1b2c3d4",
+  "issuer": "",
+  "account": "",
+  "code": "123456",
+  "period": 30,
+  "remaining": 18
+}</code></pre>
+
+        <div class="endpoint-row">
+          <span class="method post">POST</span>
+          <code>/api/totp/codes/batch</code>
+        </div>
+        <p class="doc-desc">批量查询最多 200 个唯一标识；不存在的记录会在对应项返回中文错误。</p>
+        <pre><code>curl -X POST http://127.0.0.1:8010/api/totp/codes/batch \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: tk_xxx" \
+  -d '{"ids":["a1b2c3d4","x9y8z7w6"]}'</code></pre>
+      </section>
+
+      <section class="doc-section glass-card">
+        <div class="section-title">
+          <span class="pulse-dot"></span>
+          <h2>字段说明</h2>
+        </div>
+        <table class="doc-table">
+          <thead>
+            <tr><th>字段</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>base32_secret</code></td><td>Base32 手动密钥。支持空格、小写和横线分组，服务端会自动规范化。</td></tr>
+            <tr><td><code>otpauth_uri</code></td><td>标准 TOTP 链接，通常从二维码中解析得到。</td></tr>
+            <tr><td><code>code</code></td><td>当前动态验证码。</td></tr>
+            <tr><td><code>remaining</code></td><td>当前验证码剩余有效秒数。</td></tr>
+            <tr><td><code>unique_id</code></td><td>控制台生成记录后的 8 位唯一标识，用于后续查询。</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

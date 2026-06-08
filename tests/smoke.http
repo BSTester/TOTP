@@ -1,0 +1,39 @@
+### 1) Generate API key
+POST http://127.0.0.1:8010/api/keys/generate
+Content-Type: application/json
+
+{
+  "name": "smoke"
+}
+
+### 2) Import URI (replace X-API-Key)
+POST http://127.0.0.1:8010/api/totp/import-uri
+Content-Type: application/json
+X-API-Key: REPLACE_ME
+
+{
+  "otpauth_uri": "otpauth://totp/GitHub:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&algorithm=SHA1&digits=6&period=30"
+}
+
+### 3) Query code by unique id
+GET http://127.0.0.1:8010/api/totp/code/a1b2c3d4
+X-API-Key: REPLACE_ME
+
+### 4) Code from URI (one-time, no persist)
+POST http://127.0.0.1:8010/api/totp/code-from-uri
+Content-Type: application/json
+X-API-Key: REPLACE_ME
+
+{
+  "otpauth_uri": "otpauth://totp/GitHub:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"
+}
+
+### 5) Code from URI (persist with email)
+POST http://127.0.0.1:8010/api/totp/code-from-uri
+Content-Type: application/json
+X-API-Key: REPLACE_ME
+
+{
+  "otpauth_uri": "otpauth://totp/GitHub:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub",
+  "email": "alice@example.com"
+}

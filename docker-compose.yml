@@ -1,0 +1,18 @@
+services:
+  totp-mvp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: totp-hosted-mvp:latest
+    container_name: totp-hosted-mvp
+    ports:
+      - "8010:8010"
+    environment:
+      APP_DB_PATH: /data/data.db
+      APP_MASTER_KEY_FILE: /data/.master_key
+    volumes:
+      - totp_data:/data
+    restart: unless-stopped
+
+volumes:
+  totp_data:
