@@ -83,7 +83,7 @@ def main() -> int:
     status_code, imported = request("POST", "/api/totp/import-uri", {"otpauth_uri": TEST_URI}, headers)
     check(status_code == 200, f"import uri failed: {status_code} {imported}")
     unique_id = imported["unique_id"]
-    check(len(unique_id) == 8, f"unexpected unique_id: {unique_id}")
+    check(len(unique_id) == 16, f"unexpected unique_id: {unique_id}")
     print(f"导入 URI: OK unique_id={unique_id}")
 
     status_code, listed = request("GET", "/api/totp/list", headers=headers)

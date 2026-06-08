@@ -66,7 +66,7 @@
           <span class="pulse-dot cyan"></span>
           <h2>查询动态密码</h2>
         </div>
-        <p class="doc-desc">先在控制台生成记录，拿到 8 位唯一标识后，可通过接口实时查询当前验证码。</p>
+        <p class="doc-desc">先在控制台生成记录，拿到 16 位固定唯一标识后，可通过接口实时查询当前验证码。</p>
 
         <div class="endpoint-row">
           <span class="method get">GET</span>
@@ -110,7 +110,7 @@
             <tr><td><code>otpauth_uri</code></td><td>标准 TOTP 链接，通常从二维码中解析得到。</td></tr>
             <tr><td><code>code</code></td><td>当前动态验证码。</td></tr>
             <tr><td><code>remaining</code></td><td>当前验证码剩余有效秒数。</td></tr>
-            <tr><td><code>unique_id</code></td><td>控制台生成记录后的 8 位唯一标识，用于后续查询。</td></tr>
+            <tr><td><code>unique_id</code></td><td>控制台生成记录后的 16 位固定唯一标识，用于后续查询。</td></tr>
           </tbody>
         </table>
       </section>

@@ -1,10 +1,10 @@
 services:
-  totp-mvp:
+  totp:
     build:
       context: .
       dockerfile: Dockerfile
-    image: totp-hosted-mvp:latest
-    container_name: totp-hosted-mvp
+    image: totp-hosted:latest
+    container_name: totp-hosted
     ports:
       - "8010:8010"
     environment:

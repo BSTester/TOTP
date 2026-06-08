@@ -1,6 +1,6 @@
-# Hosted TOTP MVP
+# Hosted TOTP
 
-一个可运行的 TOTP 托管式 MVP：
+一个可运行的 TOTP 托管式服务：
 
 - Web 端：登录页 + 导入/查询页面
 - API 端：导入 Base32 密钥 / otpauth URI / 二维码图片、按唯一标识查询、批量查询
@@ -9,11 +9,11 @@
 
 ## 唯一标识规则
 
-固定格式：`8位随机字符串`
+固定格式：`16位固定编码字符串`
 
-示例：`a1b2c3d4`
+示例：`6f1c9a2b7e4d8c03`
 
-同一 API Key 下唯一；不同 API Key 之间相互隔离。
+同一 API Key 下，相同规范化密钥、算法、位数和周期会生成相同唯一标识；标识按 API Key 隔离。
 
 ## 目录
 
@@ -29,7 +29,7 @@
 1. 进入目录
 
 ```bash
-cd d:/Code/Test/totp-hosted-mvp
+cd d:/Code/Test/totp-hosted
 ```
 
 1. 创建虚拟环境并安装依赖
@@ -61,14 +61,14 @@ uvicorn app.main:app --reload --port 8010
 1. 构建镜像
 
 ```bash
-cd d:/Code/Test/totp-hosted-mvp
-docker build -t totp-hosted-mvp:latest .
+cd d:/Code/Test/totp-hosted
+docker build -t totp-hosted:latest .
 ```
 
 1. 运行容器
 
 ```bash
-docker run --name totp-hosted-mvp -p 8010:8010 -e APP_DB_PATH=/data/data.db -v totp_data:/data --rm totp-hosted-mvp:latest
+docker run --name totp-hosted -p 8010:8010 -e APP_DB_PATH=/data/data.db -v totp_data:/data --rm totp-hosted:latest
 ```
 
 1. 或使用 compose
@@ -161,11 +161,12 @@ curl -X POST http://127.0.0.1:8010/api/totp/code-from-source \
 
 - 生成验证码支持拖拽/上传二维码、粘贴 otpauth URI、输入 Base32 密钥。
 - 上传二维码会先识别并回填链接；如果点击生成时仍选择了图片，则以图片内容为准。
-- 生成记录后返回 8 位唯一标识，首页卡片展示当前动态码、剩余秒数，并在周期结束后自动刷新轮换。
+- 重复导入同一密钥或同一 otpauth 链接时，会复用已有唯一标识，不新增重复卡片。
+- 生成记录后返回 16 位固定唯一标识，首页卡片展示当前动态码、剩余秒数，并在周期结束后自动刷新轮换。
 - 首页支持按唯一标识模糊搜索和一键复制验证码。
 - `GET /api/totp/list` 返回列表记录的当前 `code/period/remaining`，但不会返回 secret 或密文。
 
-## 安全说明（MVP）
+## 安全说明
 
 > 风险提醒：为支持通过接口二次获取验证码，本项目会在服务端保存必要的 TOTP 配置信息（密钥会加密存储）。请仅在你信任并可控的环境中使用，妥善保管 API Key；因使用本项目或配置不当造成的风险与损失，由使用者自行承担，本项目不承担责任。
 
@@ -176,8 +177,8 @@ curl -X POST http://127.0.0.1:8010/api/totp/code-from-source \
 - 上传二维码图片只用于识别，不会持久化保存；上传对象读取后会关闭
 - Docker 默认把开发主密钥保存到 `/data/.master_key`，避免容器重建后无法解密旧数据。
 
-## 已知限制（MVP）
+## 已知限制
 
 - API Key 生成接口默认开放，便于演示
 - 未接入 KMS/Vault、审计日志与复杂 RBAC
-- 使用 SQLite，适合单机 MVP
+- 使用 SQLite，适合单机

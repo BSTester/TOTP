@@ -3,15 +3,12 @@ from __future__ import annotations
 import datetime as dt
 import secrets
 import sqlite3
-import string
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .security import hash_api_key
-
-ALPHABET = string.ascii_lowercase + string.digits
 
 
 @dataclass(frozen=True)
@@ -65,6 +62,16 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_totp_owner ON totp_entries(owner_key_id);
                 """
             )
+            conn.execute("DROP INDEX IF EXISTS idx_totp_owner_secret_fingerprint")
+            columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(totp_entries)").fetchall()
+            }
+            if "secret_fingerprint" in columns:
+                try:
+                    conn.execute("ALTER TABLE totp_entries DROP COLUMN secret_fingerprint")
+                except sqlite3.OperationalError:
+                    conn.execute("UPDATE totp_entries SET secret_fingerprint = NULL")
 
     def create_api_key(self, name: str) -> tuple[str, str]:
         raw_key = f"tk_{secrets.token_urlsafe(24)}"
@@ -98,28 +105,6 @@ class Database:
         if not row:
             return None
         return ApiKeyOwner(id=row["id"], name=row["name"])
-
-    def unique_id_exists(self, owner_key_id: str, unique_id: str) -> bool:
-        with self.connect() as conn:
-            row = conn.execute(
-                """
-                SELECT 1
-                FROM totp_entries
-                WHERE owner_key_id = ? AND unique_id = ?
-                LIMIT 1
-                """,
-                (owner_key_id, unique_id),
-            ).fetchone()
-        return row is not None
-
-    def generate_unique_id(self, owner_key_id: str, tries: int = 20) -> tuple[str, str]:
-        for _ in range(tries):
-            suffix = "".join(secrets.choice(ALPHABET) for _ in range(8))
-            unique_id = suffix
-            if not self.unique_id_exists(owner_key_id, unique_id):
-                return unique_id, suffix
-
-        raise RuntimeError("Unable to generate unique_id after retries")
 
     def create_totp_entry(
         self,

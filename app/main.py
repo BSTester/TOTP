@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hmac
 import io
+import sqlite3
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
@@ -12,7 +14,7 @@ from PIL import Image
 
 from .config import load_settings
 from .db import ApiKeyOwner, Database
-from .otp import generate_totp_code, guess_email, parse_base32_secret, parse_otpauth_uri
+from .otp import generate_totp_code, guess_email, normalize_base32_secret, parse_base32_secret, parse_otpauth_uri
 from .schemas import (
     BatchCodesRequest,
     BatchCodesResponse,
@@ -32,7 +34,7 @@ settings = load_settings()
 db = Database(settings.db_path)
 db.init_schema()
 
-app = FastAPI(title="Hosted TOTP MVP", version="0.1.0")
+app = FastAPI(title="Hosted TOTP", version="0.1.0")
 
 BASE_DIR = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
@@ -153,6 +155,37 @@ def _display_unique_id(row: dict) -> str:
     return unique_id.rsplit("#", 1)[-1]
 
 
+def _unique_id_from_config(owner_key_id: str, config: dict[str, str | int]) -> str:
+    normalized_secret = normalize_base32_secret(str(config["secret"]))
+    normalized_algorithm = str(config["algorithm"]).strip().upper() or "SHA1"
+    payload = "\0".join(
+        [
+            "totp-unique-id-v1",
+            owner_key_id,
+            normalized_secret,
+            normalized_algorithm,
+            str(int(config["digits"])),
+            str(int(config["period"])),
+        ]
+    ).encode("utf-8")
+    # HMAC hides the secret while still producing a stable lookup id.
+    return hmac.new(settings.master_key, payload, "sha256").hexdigest()[:16]
+
+
+def _row_to_import_record(row: dict) -> dict:
+    return {
+        "id": row["id"],
+        "unique_id": row["unique_id"],
+        "email": row["email"],
+        "random_suffix": row["random_suffix"],
+        "issuer": row["issuer"],
+        "account": row["account_name"],
+        "algorithm": row["algorithm"],
+        "digits": row["digits"],
+        "period": row["period"],
+        "created_at": row["created_at"],
+    }
+
 def _mask_api_key(value: str) -> str:
     value = value.strip()
     if len(value) <= 12:
@@ -163,6 +196,11 @@ def _mask_api_key(value: str) -> str:
 
 def _import_uri(owner: ApiKeyOwner, payload: ImportUriRequest) -> dict:
     config = _config_from_payload(payload)
+    unique_id = _unique_id_from_config(owner.id, config)
+
+    existing = db.get_totp_entry(owner.id, unique_id)
+    if existing:
+        return _row_to_import_record(dict(existing))
 
     email = (payload.email or "").strip().lower()
     if not email:
@@ -170,22 +208,27 @@ def _import_uri(owner: ApiKeyOwner, payload: ImportUriRequest) -> dict:
         if guessed:
             email = guessed
 
-    unique_id, suffix = db.generate_unique_id(owner.id)
     encrypted_secret, nonce = encrypt_secret(str(config["secret"]), settings.master_key)
 
-    return db.create_totp_entry(
-        owner_key_id=owner.id,
-        unique_id=unique_id,
-        email=email,
-        random_suffix=suffix,
-        issuer=str(config["issuer"]),
-        account_name=str(config["account"]),
-        algorithm=str(config["algorithm"]),
-        digits=int(config["digits"]),
-        period=int(config["period"]),
-        encrypted_secret=encrypted_secret,
-        secret_nonce=nonce,
-    )
+    try:
+        return db.create_totp_entry(
+            owner_key_id=owner.id,
+            unique_id=unique_id,
+            email=email,
+            random_suffix=unique_id,
+            issuer=str(config["issuer"]),
+            account_name=str(config["account"]),
+            algorithm=str(config["algorithm"]),
+            digits=int(config["digits"]),
+            period=int(config["period"]),
+            encrypted_secret=encrypted_secret,
+            secret_nonce=nonce,
+        )
+    except sqlite3.IntegrityError as exc:
+        existing = db.get_totp_entry(owner.id, unique_id)
+        if existing:
+            return _row_to_import_record(dict(existing))
+        raise exc
 
 
 
@@ -411,7 +454,12 @@ def batch_codes(payload: BatchCodesRequest, owner: ApiKeyOwner = Depends(get_own
 @app.get("/api/totp/list", response_model=TotpListResponse)
 def list_totp(owner: ApiKeyOwner = Depends(get_owner)) -> TotpListResponse:
     items: list[TotpListItemResponse] = []
+    seen_ids: set[str] = set()
     for row in db.list_totp_entries(owner.id, include_secret=True):
+        unique_id = _display_unique_id(row)
+        if unique_id in seen_ids:
+            continue
+        seen_ids.add(unique_id)
         code, remaining = _generate_code_from_row(row)
         items.append(
             TotpListItemResponse(

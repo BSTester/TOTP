@@ -52,7 +52,7 @@ def test_import_list_single_and_batch_codes(client: TestClient) -> None:
     imported = client.post("/api/totp/import-uri", headers=headers, json={"otpauth_uri": TEST_URI})
     assert imported.status_code == 200
     imported_data = imported.json()
-    assert len(imported_data["unique_id"]) == 8
+    assert len(imported_data["unique_id"]) == 16
     assert imported_data["digits"] == 6
 
     listed = client.get("/api/totp/list", headers=headers)
@@ -104,7 +104,7 @@ def test_code_from_uri_response_has_timer_and_optional_persist(client: TestClien
     assert persisted.status_code == 200
     persisted_data = persisted.json()
     assert persisted_data["persisted"] is True
-    assert len(persisted_data["unique_id"]) == 8
+    assert len(persisted_data["unique_id"]) == 16
 
     listed = client.get("/api/totp/list", headers=headers)
     assert listed.status_code == 200
@@ -158,7 +158,7 @@ def test_base32_secret_import_and_one_time_code(client: TestClient) -> None:
     )
     assert imported.status_code == 200
     imported_data = imported.json()
-    assert len(imported_data["unique_id"]) == 8
+    assert len(imported_data["unique_id"]) == 16
 
     listed = client.get("/api/totp/list", headers=headers)
     assert listed.status_code == 200
@@ -166,6 +166,29 @@ def test_base32_secret_import_and_one_time_code(client: TestClient) -> None:
     assert len(items) == 1
     assert items[0]["unique_id"] == imported_data["unique_id"]
     assert items[0]["code"].isdigit()
+
+
+def test_duplicate_import_reuses_existing_entry(client: TestClient) -> None:
+    api_key = create_key(client)
+    headers = {"X-API-Key": api_key}
+
+    first = client.post("/api/totp/import-source", headers=headers, json={"otpauth_uri": TEST_URI})
+    second = client.post("/api/totp/import-source", headers=headers, json={"otpauth_uri": TEST_URI})
+    third = client.post(
+        "/api/totp/import-source",
+        headers=headers,
+        json={"base32_secret": "jbsw y3dp-ehpk 3pxp", "issuer": "Other", "account": "other@example.com"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert third.status_code == 200
+    assert second.json()["unique_id"] == first.json()["unique_id"]
+    assert third.json()["unique_id"] == first.json()["unique_id"]
+
+    listed = client.get("/api/totp/list", headers=headers)
+    assert listed.status_code == 200
+    assert len(listed.json()["items"]) == 1
 
 
 def test_invalid_base32_secret_returns_chinese_error(client: TestClient) -> None:
@@ -179,6 +202,20 @@ def test_invalid_base32_secret_returns_chinese_error(client: TestClient) -> None
     )
     assert response.status_code == 400
     assert "Base32 密钥" in response.json()["detail"]
+
+
+def test_deterministic_unique_id_is_scoped_by_api_key(client: TestClient) -> None:
+    first_key = create_key(client)
+    second_key = create_key(client)
+
+    first = client.post("/api/totp/import-source", headers={"X-API-Key": first_key}, json={"otpauth_uri": TEST_URI})
+    second = client.post("/api/totp/import-source", headers={"X-API-Key": second_key}, json={"otpauth_uri": TEST_URI})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert len(first.json()["unique_id"]) == 16
+    assert len(second.json()["unique_id"]) == 16
+    assert first.json()["unique_id"] != second.json()["unique_id"]
 
 
 def test_api_key_data_isolation(client: TestClient) -> None:
