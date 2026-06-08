@@ -388,6 +388,10 @@ input[type="file"]::file-selector-button {
 }
 
 .otp-code {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1ch;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: #66a3ff;
   font-size: clamp(2.2rem, 5.4vw, 3.45rem);
@@ -398,6 +402,10 @@ input[type="file"]::file-selector-button {
   text-shadow: 0 0 30px rgba(91, 140, 255, 0.42);
   white-space: nowrap;
   word-break: keep-all;
+}
+
+.otp-code-part {
+  display: inline-block;
 }
 
 .timer-track {

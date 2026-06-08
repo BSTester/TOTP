@@ -174,7 +174,11 @@
     }
 
     function formatCode(value) {
-      return String(value || '------');
+      const code = String(value || '------');
+      if (/^\d{6}$/.test(code)) {
+        return `<span class="otp-code-part">${escapeHtml(code.slice(0, 3))}</span><span class="otp-code-part">${escapeHtml(code.slice(3))}</span>`;
+      }
+      return `<span class="otp-code-part">${escapeHtml(code)}</span>`;
     }
 
     async function copyText(value) {
@@ -204,7 +208,7 @@
             <span class="card-identity">${escapeHtml(identity || '------')}</span>
             <b>${remaining}s</b>
           </div>
-          <div class="otp-code">${escapeHtml(formatCode(rawCode))}</div>
+          <div class="otp-code">${formatCode(rawCode)}</div>
           <button class="copy-code-btn ghost-btn small-btn" type="button" data-code="${escapeHtml(rawCode)}" data-id="${escapeHtml(identity)}">${copied ? '已复制' : '复制验证码'}</button>
           <div class="timer-track"><span style="width:${pct}%"></span></div>
         </article>
